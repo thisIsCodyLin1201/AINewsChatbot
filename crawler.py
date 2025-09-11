@@ -268,13 +268,7 @@ class TechOrangeCrawler:
                     response.raise_for_status()
                     
                     # 解析搜尋結果頁面
-                    try:
-                        soup = BeautifulSoup(response.content, 'lxml')
-                    except:
-                        try:
-                            soup = BeautifulSoup(response.content, 'html5lib')
-                        except:
-                            soup = BeautifulSoup(response.content, 'html.parser')
+                    soup = BeautifulSoup(response.content, 'lxml')
                     
                     # 尋找文章連結
                     article_links = self._extract_article_links_from_search(soup)
@@ -479,14 +473,8 @@ class TechOrangeCrawler:
             response = requests.get(url, headers=self.headers, timeout=15)
             response.raise_for_status()
             
-            # 嘗試使用不同的解析器
-            try:
-                soup = BeautifulSoup(response.content, 'lxml')
-            except:
-                try:
-                    soup = BeautifulSoup(response.content, 'html5lib')
-                except:
-                    soup = BeautifulSoup(response.content, 'html.parser')
+            # 解析文章頁面
+            soup = BeautifulSoup(response.content, 'lxml')
             
             # 移除不需要的元素
             for element in soup(['script', 'style', 'nav', 'footer', 'header', 'aside']):
@@ -579,13 +567,7 @@ class TechOrangeCrawler:
             response = requests.get(url, headers=self.headers, timeout=10)
             response.raise_for_status()
             
-            try:
-                soup = BeautifulSoup(response.content, 'lxml')
-            except:
-                try:
-                    soup = BeautifulSoup(response.content, 'html5lib')
-                except:
-                    soup = BeautifulSoup(response.content, 'html.parser')
+            soup = BeautifulSoup(response.content, 'lxml')
             
             # 尋找標題
             title_selectors = [

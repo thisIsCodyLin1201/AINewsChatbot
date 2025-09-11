@@ -1,9 +1,26 @@
+# Core Flask dependencies
 flask==2.3.3
-line-bot-sdk==3.4.0
-requests==2.31.0
-beautifulsoup4==4.12.2
-feedparser==6.0.10
-google-generativeai==0.1.0
-python-dotenv==1.0.0
 gunicorn==21.2.0
-html5lib==1.1
+
+# LINE Bot SDK
+line-bot-sdk==3.4.0
+
+# HTTP requests
+requests==2.31.0
+
+# Web scraping
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# RSS parsing
+feedparser==6.0.10
+
+# Google AI - use older version to avoid aiohttp conflicts
+google-generativeai==0.1.0
+
+# Environment management
+python-dotenv==1.0.0
+
+# Additional dependencies that might be needed
+urllib3>=1.26.0,<2.0.0
+certifi>=2023.7.22

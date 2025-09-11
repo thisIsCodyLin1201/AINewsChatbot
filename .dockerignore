@@ -1,0 +1,61 @@
+# Git files
+.git
+.gitignore
+
+# Python cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+env
+venv
+ENV
+env.bak
+venv.bak
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Development files
+.env.example
+README.md
+*.md
+
+# Test files
+tests/
+test_*.py
+
+# Backup files
+*_backup.py
+*_fixed.py
+crawler_backup.py
+crawler_fixed.py
+
+# Requirements variants
+requirements_simple.txt
+requirements-fallback.txt
+
+# Development scripts
+setup.bat
+setup.sh
+start_bot.bat
+start_ngrok.bat
+deployment_guide.py
+final_test_report.py
+restart_guide.py
+
+# Development config
+pytest.ini

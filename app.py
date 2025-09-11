@@ -264,12 +264,10 @@ def custom_process_random_push(event):
     except Exception as e:
         logger.error(f"啟動隨機推送時發生錯誤: {str(e)}")
 
-# 測試端點（僅開發環境使用）
+# 測試端點
 @app.route("/test/<keyword>", methods=['GET'])
 def test_query(keyword):
     """測試查詢端點（開發用）"""
-    if os.getenv('FLASK_ENV') == 'production':
-        abort(404)
     
     try:
         # 模擬處理流程
@@ -291,8 +289,6 @@ def test_query(keyword):
 @app.route("/test-random", methods=['GET'])
 def test_random():
     """測試隨機推送端點（開發用）"""
-    if os.getenv('FLASK_ENV') == 'production':
-        abort(404)
     
     try:
         # 模擬隨機推送流程
@@ -327,10 +323,10 @@ if __name__ == "__main__":
     # 設定 LINE Bot
     setup_line_bot()
     
-    # 取得配置
+    # 生產環境配置
     port = int(os.getenv('PORT', 5000))
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    host = os.getenv('HOST', '0.0.0.0')  # 生產環境預設綁定所有界面
+    host = os.getenv('HOST', '0.0.0.0')  # 生產環境綁定所有界面
     flask_env = os.getenv('FLASK_ENV', 'development')
     
     # 生產環境設定
