@@ -7,6 +7,7 @@
 2. 確保包含以下檔案：
    - `app.py` (主應用程式)
    - `requirements.txt` (Python 依賴)
+   - `runtime.txt` (Python 版本指定)
    - `render.yaml` (Render 配置)
    - `Procfile` (備用啟動配置)
    - `.gitignore` (忽略敏感檔案)
@@ -21,8 +22,13 @@
 #### 基本設定：
 - **Name**: `line-techorange-newsbot`
 - **Environment**: `Python 3`
-- **Build Command**: `pip install -r requirements.txt`
+- **Region**: `Singapore` (對台灣較快)
+- **Build Command**: `pip install --upgrade pip && pip install -r requirements.txt`
 - **Start Command**: `python app.py`
+
+#### 重要：Python 版本設定
+確保在 Environment Variables 中設定：
+- `PYTHON_VERSION`: `3.11`
 
 #### 環境變數設定：
 在 Render 的 Environment Variables 區域新增以下變數：
