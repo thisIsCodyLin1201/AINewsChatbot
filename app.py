@@ -1,126 +1,226 @@
 """
-LINE News Bot - 主程式
-基於 Flask 的 LINE Bot，提供新聞摘要功能
+LINE TechOrange NewsBot 主應用程序
+Flask 伺服器，處理 LINE webhook 和協調各模組
 """
+
 import os
+import threading
+import time
 from flask import Flask, request, abort
-from linebot.v3 import WebhookHandler
-from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
-from linebot.v3.messaging import ReplyMessageRequest, TextMessage
 from dotenv import load_dotenv
-from bot.handlers import handle_message
+import logging
 
 # 載入環境變數
 load_dotenv()
 
+# 匯入自定義模組
+from line_handler import LINENewsBot
+from crawler import TechOrangeCrawler
+from summarizer import GeminiSummarizer
+
+# 設置日誌
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 初始化 Flask 應用
 app = Flask(__name__)
 
-# LINE Bot 設定
-configuration = Configuration(access_token=os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
-handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+# 全域變數
+line_bot = None
+crawler = None
+summarizer = None
 
+def initialize_components():
+    """初始化所有組件"""
+    global line_bot, crawler, summarizer
+    
+    try:
+        # 初始化 LINE Bot
+        line_bot = LINENewsBot()
+        logger.info("LINE Bot 初始化成功")
+        
+        # 初始化爬蟲
+        crawler = TechOrangeCrawler()
+        logger.info("TechOrange 爬蟲初始化成功")
+        
+        # 初始化摘要器
+        summarizer = GeminiSummarizer()
+        logger.info("Gemini 摘要器初始化成功")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"組件初始化失敗: {str(e)}")
+        return False
+
+@app.route("/callback", methods=['POST'])
+def callback():
+    """LINE webhook 回調端點"""
+    
+    # 獲取 X-Line-Signature header 值
+    signature = request.headers['X-Line-Signature']
+    
+    # 獲取請求內容
+    body = request.get_data(as_text=True)
+    logger.info(f"收到 webhook 請求: {body}")
+    
+    # 驗證簽名
+    try:
+        line_bot.handle_webhook(body, signature)
+    except Exception as e:
+        logger.error(f"處理 webhook 失敗: {str(e)}")
+        abort(400)
+    
+    return 'OK'
 
 @app.route("/health", methods=['GET'])
 def health_check():
-    """健康檢查 API"""
-    return {"status": "ok", "message": "LINE News Bot is running"}, 200
-
-
-@app.route("/test", methods=['GET', 'POST'])
-def test_endpoint():
-    """測試端點"""
-    return {"method": request.method, "message": "Test endpoint working"}, 200
-
-
-@app.route("/callback", methods=['GET', 'POST'])
-def callback():
-    """LINE Bot Webhook 回調處理"""
-    if request.method == 'GET':
-        # LINE 的 Webhook 驗證可能會發送 GET 請求
-        return {"status": "ok", "message": "LINE Bot callback endpoint"}, 200
-    
-    # 處理 POST 請求（實際的 Webhook）
-    # 取得 X-Line-Signature 標頭值
-    signature = request.headers.get('X-Line-Signature', '')
-
-    # 取得請求主體作為文字
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
-
-    # 驗證請求來源
-    try:
-        handler.handle(body, signature)
-    except InvalidSignatureError:
-        print("Invalid signature. Please check your channel access token/channel secret.")
-        abort(400)
-    except Exception as e:
-        print(f"Error handling webhook: {e}")
-        abort(500)
-
-    return 'OK'
-
-
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_text_message(event):
-    """處理文字訊息"""
-    try:
-        # 使用 handlers 模組處理訊息
-        reply_text = handle_message(event)
-        
-        # 使用 v3 API 回覆訊息
-        with ApiClient(configuration) as api_client:
-            line_bot_api = MessagingApi(api_client)
-            line_bot_api.reply_message_with_http_info(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text=reply_text)]
-                )
-            )
-        
-    except Exception as e:
-        print(f"Error handling message: {e}")
-        # 發生錯誤時的預設回覆
-        error_text = "抱歉，系統發生錯誤，請稍後再試"
-        try:
-            with ApiClient(configuration) as api_client:
-                line_bot_api = MessagingApi(api_client)
-                line_bot_api.reply_message_with_http_info(
-                    ReplyMessageRequest(
-                        reply_token=event.reply_token,
-                        messages=[TextMessage(text=error_text)]
-                    )
-                )
-        except:
-            pass
-
+    """健康檢查端點"""
+    return {
+        'status': 'healthy',
+        'components': {
+            'line_bot': line_bot is not None,
+            'crawler': crawler is not None,
+            'summarizer': summarizer is not None
+        }
+    }
 
 @app.route("/", methods=['GET'])
 def index():
     """首頁"""
     return """
-    <h1>LINE News Bot</h1>
-    <p>這是一個基於 LINE Messaging API 的新聞摘要 Bot</p>
-    <h2>使用方式：</h2>
-    <ul>
-        <li>輸入 '/news' 取得最新 3 則新聞</li>
-        <li>輸入 '/news N' 取得最新 N 則新聞（1-10 則）</li>
-        <li>輸入 '新聞 N' 也可以使用中文指令</li>
-    </ul>
-    <h2>健康檢查：</h2>
-    <p><a href="/health">/health</a></p>
+    <h1>LINE TechOrange NewsBot</h1>
+    <p>狀態: 正常運行</p>
+    <p>功能: 搜尋 TechOrange 文章並產生 AI 摘要</p>
+    <p>使用方式: 在 LINE 中輸入關鍵字即可</p>
     """
 
+class NewsBot:
+    """新聞機器人主要邏輯類別"""
+    
+    def __init__(self):
+        self.max_articles = int(os.getenv('MAX_ARTICLES', 3))
+        
+    def process_user_query(self, user_id: str, keyword: str):
+        """
+        處理用戶查詢請求（在背景執行）
+        
+        Args:
+            user_id: LINE 用戶 ID
+            keyword: 搜尋關鍵字
+        """
+        try:
+            logger.info(f"開始處理用戶查詢: 用戶ID={user_id}, 關鍵字={keyword}")
+            
+            # 1. 爬取文章
+            logger.info(f"正在爬取 TechOrange 文章...")
+            articles = crawler.fetch_articles(keyword, self.max_articles)
+            
+            if not articles:
+                line_bot.send_article_results(user_id, [], keyword)
+                return
+            
+            logger.info(f"成功爬取 {len(articles)} 篇文章")
+            
+            # 2. 生成摘要
+            logger.info("正在生成文章摘要...")
+            summarized_articles = summarizer.summarize_articles(articles)
+            
+            if not summarized_articles:
+                logger.warning("摘要生成失敗")
+                line_bot.send_article_results(user_id, [], keyword)
+                return
+            
+            logger.info(f"成功生成 {len(summarized_articles)} 篇摘要")
+            
+            # 3. 發送結果
+            line_bot.send_article_results(user_id, summarized_articles, keyword)
+            
+            logger.info(f"用戶查詢處理完成: {keyword}")
+            
+        except Exception as e:
+            logger.error(f"處理用戶查詢時發生錯誤: {str(e)}")
+            try:
+                # 嘗試發送錯誤訊息
+                error_articles = [{
+                    'title': '處理錯誤',
+                    'summary': '抱歉，處理您的請求時發生錯誤，請稍後再試。',
+                    'url': '#'
+                }]
+                line_bot.send_article_results(user_id, error_articles, keyword)
+            except Exception as send_error:
+                logger.error(f"發送錯誤訊息失敗: {str(send_error)}")
+
+# 創建新聞機器人實例
+news_bot = NewsBot()
+
+# 覆寫 LINE Bot 的訊息處理方法
+def custom_process_keyword_query(event, keyword: str):
+    """自定義關鍵字查詢處理"""
+    try:
+        user_id = event.source.user_id
+        
+        # 在背景執行處理程序，避免 LINE 超時
+        threading.Thread(
+            target=news_bot.process_user_query,
+            args=(user_id, keyword),
+            daemon=True
+        ).start()
+        
+    except Exception as e:
+        logger.error(f"啟動背景處理時發生錯誤: {str(e)}")
+
+# 測試端點（僅開發環境使用）
+@app.route("/test/<keyword>", methods=['GET'])
+def test_query(keyword):
+    """測試查詢端點（開發用）"""
+    if os.getenv('FLASK_ENV') != 'development':
+        abort(404)
+    
+    try:
+        # 模擬處理流程
+        articles = crawler.fetch_articles(keyword, 2)
+        summarized_articles = summarizer.summarize_articles(articles)
+        
+        return {
+            'keyword': keyword,
+            'articles_found': len(articles),
+            'summaries_generated': len(summarized_articles),
+            'results': summarized_articles
+        }
+        
+    except Exception as e:
+        return {
+            'error': str(e)
+        }, 500
+
+def setup_line_bot():
+    """設定 LINE Bot 的自定義處理邏輯"""
+    if line_bot:
+        # 替換原本的處理方法
+        line_bot.process_keyword_query = custom_process_keyword_query
 
 if __name__ == "__main__":
-    # 從環境變數取得 PORT，預設為 4040
-    port = int(os.environ.get('PORT', 4040))
+    # 初始化組件
+    if not initialize_components():
+        logger.error("組件初始化失敗，無法啟動服務")
+        exit(1)
     
-    # 檢查必要的環境變數
-    if not os.getenv('LINE_CHANNEL_ACCESS_TOKEN'):
-        print("Warning: LINE_CHANNEL_ACCESS_TOKEN not found in environment variables")
-    if not os.getenv('LINE_CHANNEL_SECRET'):
-        print("Warning: LINE_CHANNEL_SECRET not found in environment variables")
+    # 設定 LINE Bot
+    setup_line_bot()
     
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # 取得配置
+    port = int(os.getenv('PORT', 5000))
+    debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
+    host = os.getenv('HOST', '127.0.0.1')
+    
+    logger.info(f"啟動 Flask 伺服器: http://{host}:{port}")
+    logger.info(f"Debug 模式: {debug_mode}")
+    logger.info("LINE TechOrange NewsBot 已啟動，等待用戶查詢...")
+    
+    # 啟動 Flask 應用
+    app.run(
+        host=host,
+        port=port,
+        debug=debug_mode
+    )

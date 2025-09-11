@@ -1,181 +1,241 @@
-# LINE News Bot
+# LINE TechOrange NewsBot
 
-一個基於 LINE Messaging API 的新聞摘要 Chatbot，提供 TechOrange 最新科技新聞。
+一個基於 LINE Messaging API 的 Chatbot，可以搜尋科技報橘文章並使用 Google Gemini AI 產生摘要。
 
 ## 功能特色
 
-- `/news` 或 `/news N` 指令取得最新新聞（1-10 篇）
-- 支援中文指令「新聞 N」
-- 自動摘要生成（Lead-3 演算法）
-- 健康檢查 API
-- 完整錯誤處理機制
-
-## 專案結構
-
-```
-line-news-bot/
-├── app.py              # Flask 主程式 + LINE Webhook
-├── bot/
-│   ├── __init__.py     # Bot 套件初始化
-│   ├── handlers.py     # 指令分派處理
-│   ├── news.py         # TechOrange RSS 抓取
-│   └── summarize.py    # Lead-3 摘要生成
-├── .env.example        # 環境變數範本
-├── pyproject.toml      # uv 依賴管理
-├── uv.lock            # 依賴鎖定檔
-└── README.md          # 專案說明
-```
+- 🔍 智能模糊搜尋 TechOrange 最新文章
+  - 精確匹配優先顯示
+  - 支援同義詞搜尋（如：AI ↔ 人工智慧 ↔ 機器學習）
+  - 智能關鍵字擴展（如：區塊鏈 ↔ Bitcoin ↔ 加密貨幣）
+- 🤖 AI 智能摘要生成（100-200字精簡摘要）
+- 📱 LINE 官方帳號整合
+- ⚡ 快速回應（< 5秒）
+- 🎛️ 模組化設計
 
 ## 安裝與設定
 
-### 1. 安裝依賴
+### 1. 環境要求
+
+- Python 3.10+
+- LINE Developer Account
+- Google Cloud Account (Gemini API)
+
+### 2. 安裝依賴
+
 ```bash
-# 使用 uv 安裝依賴
-uv sync
+# 使用 uv（推薦）
+uv pip install -r requirements.txt
 
 # 或使用 pip
 pip install -r requirements.txt
 ```
 
-### 2. 設定環境變數
+### 3. 環境變數設定
+
+複製 `.env.example` 為 `.env` 並填入以下資訊：
+
 ```bash
-# 複製環境變數範本
 cp .env.example .env
-
-# 編輯 .env 檔案，填入你的 LINE Channel 資訊
 ```
 
-`.env` 檔案內容：
+編輯 `.env` 檔案：
+
+```env
+# LINE Bot Configuration
+LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token_here
+LINE_CHANNEL_SECRET=your_line_channel_secret_here
+
+# Google Gemini API Configuration  
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# Application Configuration
+FLASK_ENV=development
+FLASK_DEBUG=True
+MAX_ARTICLES=3
 ```
-LINE_CHANNEL_SECRET=your_channel_secret_here
-LINE_CHANNEL_ACCESS_TOKEN=your_channel_access_token_here
-```
 
-### 3. 取得 LINE Channel 資訊
-1. 前往 [LINE Developers Console](https://developers.line.biz/console/)
-2. 創建 Provider 和 Channel（Messaging API）
-3. 取得 Channel Secret 和 Channel Access Token
-4. 設定 Webhook URL：`https://your-domain.com/callback`
+### 4. LINE Bot 設定
 
-## 本地開發
+1. 到 [LINE Developers](https://developers.line.biz/) 創建 Messaging API Channel
+2. 取得 Channel Access Token 和 Channel Secret
+3. 設定 Webhook URL: `https://your-domain.com/callback`
 
-### 啟動服務
+### 5. Google Gemini API 設定
+
+1. 到 [Google AI Studio](https://makersuite.google.com/app/apikey) 取得 API Key
+2. 將 API Key 填入 `.env` 檔案
+
+## 運行方式
+
+### 本地開發
+
 ```bash
-# 使用 uv
-uv run python app.py
-
-# 或直接執行
 python app.py
 ```
 
-### 使用 ngrok 建立公網 URL
+伺服器將在 `http://127.0.0.1:5000` 啟動
+
+### 使用 ngrok 進行本地測試
+
 ```bash
 # 安裝 ngrok
-# 啟動 ngrok
+# 在另一個終端運行
 ngrok http 5000
 
-# 將產生的 https URL 設定為 LINE Webhook URL
-# 例如：https://abc123.ngrok.io/callback
+# 將 ngrok 提供的 HTTPS URL 設定為 LINE Webhook URL
 ```
 
-## 測試功能
+### 部署到雲端
 
-### 測試新聞抓取
+推薦部署平台：
+- Railway
+- Render  
+- Heroku
+- Google Cloud Run
+
+## 項目結構
+
+```
+newchatbot/
+├── app.py              # Flask 主應用程序
+├── line_handler.py     # LINE Messaging API 處理
+├── crawler.py          # TechOrange 爬蟲模組
+├── summarizer.py       # Gemini AI 摘要模組
+├── requirements.txt    # Python 依賴
+├── .env.example       # 環境變數範例
+├── tests/             # 測試檔案
+│   ├── test_crawler.py
+│   └── test_summarizer.py
+└── README.md          # 說明文件
+```
+
+## API 端點
+
+- `POST /callback` - LINE Webhook 回調
+- `GET /health` - 健康檢查
+- `GET /` - 首頁
+- `GET /test/<keyword>` - 測試查詢（僅開發環境）
+
+## 使用方式
+
+### 搜尋範例
+
+機器人支援智能模糊搜尋，以下是一些使用範例：
+
+#### 基本搜尋
+```
+AI
+科技
+新創
+```
+
+#### 模糊搜尋範例
+- **輸入 `AI`** → 也會搜尋：人工智慧、機器學習、深度學習
+- **輸入 `區塊鏈`** → 也會搜尋：blockchain、比特幣、加密貨幣
+- **輸入 `5G`** → 也會搜尋：第五代、5G網路、行動通訊
+- **輸入 `新創`** → 也會搜尋：startup、創業、新創公司
+
+#### 搜尋優先順序
+1. **精確匹配** - 標題包含完全相同的關鍵字
+2. **同義詞匹配** - 標題包含相關同義詞
+3. **模糊匹配** - 標題包含相關概念
+
+### 操作步驟
+
+1. 將 LINE Bot 加為好友
+2. 在聊天室輸入關鍵字（例如：「AI」、「區塊鏈」）
+3. Bot 會搜尋相關的 TechOrange 文章
+4. 使用 Gemini AI 生成摘要
+5. 回傳文章標題、摘要和連結
+
+### 回應格式
+
+每篇文章包含：
+- 📝 **標題**：文章完整標題
+- 🤖 **AI 摘要**：100-200字的重點摘要
+- 🔗 **閱讀全文**：原文連結
+
+## 測試
+
+運行單元測試：
+
 ```bash
-# 測試 RSS 抓取功能
-uv run python -m bot.news
+# 測試爬蟲模組
+python -m pytest tests/test_crawler.py -v
+
+# 測試摘要模組  
+python -m pytest tests/test_summarizer.py -v
+
+# 運行所有測試
+python -m pytest tests/ -v
+```
+
+手動測試：
+
+```bash
+# 測試爬蟲功能
+python crawler.py
 
 # 測試摘要功能
-uv run python -m bot.summarize
-```
+python summarizer.py
 
-### 健康檢查
-```bash
-curl http://localhost:5000/health
-```
-
-### LINE Bot 指令
-在 LINE 中傳送以下訊息：
-- `/news` - 取得最新 3 則新聞
-- `/news 5` - 取得最新 5 則新聞
-- `新聞 3` - 中文指令取得 3 則新聞
-
-## 部署到雲端
-
-### Render 部署
-1. 推送程式碼到 GitHub
-2. 連接 Render 到你的 repository
-3. 設定環境變數
-4. 部署服務
-
-### Heroku 部署
-```bash
-# 創建 Procfile
-echo "web: python app.py" > Procfile
-
-# 推送到 Heroku
-heroku create your-app-name
-git push heroku main
-heroku config:set LINE_CHANNEL_SECRET=your_secret
-heroku config:set LINE_CHANNEL_ACCESS_TOKEN=your_token
-```
-
-## API 文檔
-
-### Webhook 端點
-- `POST /callback` - LINE Bot webhook 回調
-- `GET /health` - 健康檢查
-- `GET /` - 服務首頁
-
-### 回覆格式
-```
-📰 最新新聞摘要
-
-1. 新聞標題
-簡短摘要內容...
-🔗 https://article-link.com
-
-2. 第二則新聞標題
-第二則新聞摘要...
-🔗 https://article-link2.com
+# 測試 LINE Handler
+python line_handler.py
 ```
 
 ## 開發指南
 
-### 新增新聞來源
-在 `bot/news.py` 中新增新的 RSS 來源：
-```python
-def get_inside_articles(count=3):
-    # 實作 Inside 新聞抓取
-    pass
-```
+### 添加新功能
 
-### 改進摘要演算法
-在 `bot/summarize.py` 中實作更進階的摘要方法：
-```python
-def ai_summarize(content):
-    # 整合 OpenAI 或其他 AI 服務
-    pass
-```
+1. 在對應模組添加功能
+2. 更新單元測試
+3. 更新文檔
+
+### 調試技巧
+
+1. 檢查日誌輸出
+2. 使用 `/health` 端點檢查組件狀態
+3. 使用 `/test/<keyword>` 端點測試查詢
+
+### 性能優化
+
+- 調整 `MAX_ARTICLES` 參數
+- 實施緩存機制
+- 優化 Gemini API 調用頻率
 
 ## 故障排除
 
-### 常見錯誤
-1. **Invalid signature** - 檢查 Channel Secret 是否正確
-2. **抓不到新聞** - 檢查網路連線和 RSS URL
-3. **Import 錯誤** - 確認已安裝所有依賴套件
+### 常見問題
 
-### 除錯模式
+1. **LINE Bot 沒有回應**
+   - 檢查 Webhook URL 是否正確
+   - 確認 Channel Access Token 和 Secret 正確
+
+2. **爬蟲無法取得文章**
+   - 檢查網路連線
+   - TechOrange 網站結構可能有變更
+
+3. **Gemini API 錯誤**
+   - 確認 API Key 正確
+   - 檢查 API 額度限制
+
+### 日誌檢查
+
+檢查應用程序日誌以瞭解詳細錯誤資訊：
+
 ```bash
-# 啟用 Flask debug 模式
-export FLASK_DEBUG=True
-python app.py
+tail -f app.log  # 如果有設定日誌檔案
 ```
 
 ## 授權
 
 MIT License
 
-## 聯絡資訊
+## 貢獻
 
-如有問題請開 Issue 或聯絡維護者。
+歡迎提交 Issue 和 Pull Request！
+
+## 聯絡方式
+
+如有問題請聯絡開發團隊。
