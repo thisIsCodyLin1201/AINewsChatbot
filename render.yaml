@@ -6,7 +6,7 @@ services:
     plan: free
     buildCommand: |
       pip install --upgrade pip setuptools wheel &&
-      pip install --only-binary=all --no-cache-dir --prefer-binary -r requirements.txt
+      pip install --constraint constraints.txt --only-binary=all --no-cache-dir --prefer-binary -r requirements.txt
     startCommand: python app.py
     envVars:
       - key: PYTHON_VERSION
