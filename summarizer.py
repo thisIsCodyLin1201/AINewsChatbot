@@ -27,11 +27,12 @@ class GeminiSummarizer:
         # 配置 Gemini API
         genai.configure(api_key=self.api_key)
         
-        # 嘗試初始化不同的模型（使用 0.1.0 版本相容的模型）
+        # 嘗試初始化不同的模型（使用較新版本相容的模型）
         model_candidates = [
             'gemini-1.5-pro',
+            'gemini-1.5-flash',
             'gemini-pro',
-            'gemini-1.5-flash'
+            'gemini-1.0-pro'
         ]
         
         self.model = None

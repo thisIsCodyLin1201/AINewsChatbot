@@ -78,14 +78,20 @@ https://line-techorange-newsbot-xxxx.onrender.com
 
 ### 常見問題
 
-#### 1. Python 版本相容性問題
+#### 1. 套件依賴版本衝突
+**錯誤**: `Cannot install -r requirements.txt because these package versions have conflicting dependencies`
+**解決方案**: 
+- 使用較新的 aiohttp 3.12.x（有預編譯 wheels）
+- 放寬版本限制，讓 pip 自動解決依賴
+- 升級 google-generativeai 到較新版本
+
+#### 2. Python 版本相容性問題
 **錯誤**: `lxml`、`aiohttp` 編譯錯誤
 **解決方案**: 
-- 使用 Python 3.11（避免 3.13 的相容性問題）
-- 明確指定相容的套件版本
-- 使用預編譯的二進制套件
+- 使用 Python 3.11（穩定且有預編譯套件支援）
+- 使用較新的套件版本，避免舊版編譯問題
 
-#### 2. 部署失敗
+#### 3. 部署失敗
 **檢查項目**:
 - 確認 Dockerfile 和 requirements.txt 正確
 - 查看 Render 的 Build Logs
@@ -125,16 +131,16 @@ https://line-techorange-newsbot-xxxx.onrender.com
 
 ### 關鍵套件版本
 ```
-aiohttp==3.8.6          # 避免 3.9+ 的編譯問題
-lxml==4.9.3             # 穩定版本，支援預編譯
-line-bot-sdk==3.4.0     # 相容 aiohttp 3.8.x
-google-generativeai==0.1.0  # 避免 aiohttp 衝突
+aiohttp>=3.12.0         # 使用較新版本，有預編譯 wheels
+lxml>=4.9.3             # 穩定版本，支援預編譯
+line-bot-sdk>=3.4.0     # 放寬版本限制
+google-generativeai>=0.7.0  # 較新版本，避免依賴衝突
 ```
 
 ### Docker 策略
-- 使用 `--only-binary=all` 安裝問題套件
-- 先安裝 lxml 和 aiohttp，再安裝其他依賴
-- 包含所有必要的系統依賴
+- 讓 pip 自動解決依賴衝突
+- 使用較新的套件版本避免編譯問題
+- Python 3.11 提供最佳的套件支援
 
 ## 🚀 優勢
 

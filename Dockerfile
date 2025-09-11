@@ -22,12 +22,7 @@ RUN pip install --upgrade pip setuptools wheel
 # 複製需求檔案
 COPY requirements.txt .
 
-# 先安裝問題套件的特定版本，避免編譯錯誤
-RUN pip install --no-cache-dir --only-binary=all \
-    lxml==4.9.3 \
-    aiohttp==3.8.6
-
-# 安裝其他 Python 依賴
+# 安裝 Python 依賴（直接安裝，讓 pip 解決依賴衝突）
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製應用程式碼
