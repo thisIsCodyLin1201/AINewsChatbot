@@ -76,14 +76,33 @@ def callback():
 @app.route("/health", methods=['GET'])
 def health_check():
     """健康檢查端點"""
-    return {
-        'status': 'healthy',
-        'components': {
-            'line_bot': line_bot is not None,
-            'crawler': crawler is not None,
-            'summarizer': summarizer is not None
+    try:
+        # 簡單的健康檢查
+        status = {
+            'status': 'healthy',
+            'timestamp': time.time(),
+            'components': {
+                'line_bot': line_bot is not None,
+                'crawler': crawler is not None,
+                'summarizer': summarizer is not None
+            }
         }
-    }
+        
+        # 檢查關鍵環境變數
+        required_vars = ['LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'GEMINI_API_KEY']
+        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        
+        if missing_vars:
+            status['status'] = 'degraded'
+            status['missing_env_vars'] = missing_vars
+        
+        return status
+    except Exception as e:
+        return {
+            'status': 'unhealthy',
+            'error': str(e),
+            'timestamp': time.time()
+        }, 500
 
 @app.route("/", methods=['GET'])
 def index():
@@ -249,6 +268,9 @@ def custom_process_random_push(event):
 @app.route("/test/<keyword>", methods=['GET'])
 def test_query(keyword):
     """測試查詢端點（開發用）"""
+    if os.getenv('FLASK_ENV') == 'production':
+        abort(404)
+    
     try:
         # 模擬處理流程
         articles = crawler.fetch_articles(keyword, 2)
@@ -269,6 +291,9 @@ def test_query(keyword):
 @app.route("/test-random", methods=['GET'])
 def test_random():
     """測試隨機推送端點（開發用）"""
+    if os.getenv('FLASK_ENV') == 'production':
+        abort(404)
+    
     try:
         # 模擬隨機推送流程
         articles = crawler.fetch_random_articles(3)
@@ -305,8 +330,15 @@ if __name__ == "__main__":
     # 取得配置
     port = int(os.getenv('PORT', 5000))
     debug_mode = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
-    host = os.getenv('HOST', '127.0.0.1')
+    host = os.getenv('HOST', '0.0.0.0')  # 生產環境預設綁定所有界面
+    flask_env = os.getenv('FLASK_ENV', 'development')
     
+    # 生產環境設定
+    if flask_env == 'production':
+        debug_mode = False
+        logger.info("生產環境模式啟動")
+    
+    logger.info(f"環境: {flask_env}")
     logger.info(f"啟動 Flask 伺服器: http://{host}:{port}")
     logger.info(f"Debug 模式: {debug_mode}")
     logger.info("LINE TechOrange NewsBot 已啟動，等待用戶查詢...")
@@ -315,5 +347,6 @@ if __name__ == "__main__":
     app.run(
         host=host,
         port=port,
-        debug=debug_mode
+        debug=debug_mode,
+        threaded=True  # 支援多執行緒處理請求
     )
