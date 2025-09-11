@@ -57,21 +57,43 @@ def initialize_components():
 def callback():
     """LINE webhook 回調端點"""
     
-    # 獲取 X-Line-Signature header 值
-    signature = request.headers['X-Line-Signature']
+    logger.info(f"收到 callback 請求: {request.method}")
+    logger.info(f"Headers: {dict(request.headers)}")
     
-    # 獲取請求內容
-    body = request.get_data(as_text=True)
-    logger.info(f"收到 webhook 請求: {body}")
-    
-    # 驗證簽名
     try:
+        # 獲取 X-Line-Signature header 值
+        signature = request.headers.get('X-Line-Signature')
+        
+        # 獲取請求內容
+        body = request.get_data(as_text=True)
+        logger.info(f"請求體長度: {len(body)}")
+        
+        # LINE webhook 驗證請求通常沒有簽名或空請求體
+        if not signature:
+            logger.info("收到無簽名的請求（可能是驗證請求）")
+            return 'OK', 200
+        
+        if not body or body.strip() == '':
+            logger.info("收到空請求體（可能是驗證請求）")
+            return 'OK', 200
+        
+        # 確保 LINE Bot 已初始化
+        if not line_bot:
+            logger.error("LINE Bot 尚未初始化")
+            # 返回 200 避免 LINE 重複發送
+            return 'OK', 200
+        
+        # 處理正常的 webhook 事件
+        logger.info("處理 LINE webhook 事件")
         line_bot.handle_webhook(body, signature)
+        logger.info("Webhook 事件處理完成")
+        
     except Exception as e:
         logger.error(f"處理 webhook 失敗: {str(e)}")
-        abort(400)
+        logger.error(f"錯誤類型: {type(e).__name__}")
+        # 即使出錯也返回 200，避免 LINE 重複發送請求
     
-    return 'OK'
+    return 'OK', 200
 
 @app.route("/health", methods=['GET'])
 def health_check():
@@ -112,7 +134,19 @@ def index():
     <p>狀態: 正常運行</p>
     <p>功能: 搜尋 TechOrange 文章並產生 AI 摘要</p>
     <p>使用方式: 在 LINE 中輸入關鍵字即可</p>
+    <br>
+    <a href="/health">健康檢查</a>
     """
+
+@app.route("/test", methods=['GET', 'POST'])
+def test_endpoint():
+    """測試端點 - 用於調試"""
+    return {
+        'method': request.method,
+        'headers': dict(request.headers),
+        'body': request.get_data(as_text=True),
+        'status': 'OK'
+    }
 
 class NewsBot:
     """新聞機器人主要邏輯類別"""
