@@ -150,6 +150,66 @@ class NewsBot:
                 line_bot.send_article_results(user_id, error_articles, keyword)
             except Exception as send_error:
                 logger.error(f"發送錯誤訊息失敗: {str(send_error)}")
+    
+    def process_random_push(self, user_id: str):
+        """
+        處理隨機推送請求（在背景執行）
+        
+        Args:
+            user_id: LINE 用戶 ID
+        """
+        try:
+            logger.info(f"開始處理隨機推送: 用戶ID={user_id}")
+            
+            # 1. 隨機爬取文章
+            logger.info(f"正在隨機擷取 TechOrange 文章...")
+            articles = crawler.fetch_random_articles(self.max_articles)
+            
+            if not articles:
+                # 發送無文章的訊息
+                error_articles = [{
+                    'title': '無法取得文章',
+                    'summary': '抱歉，目前無法擷取文章，請稍後再試。',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+                return
+            
+            logger.info(f"成功隨機擷取 {len(articles)} 篇文章")
+            
+            # 2. 生成摘要
+            logger.info("正在生成文章摘要...")
+            summarized_articles = summarizer.summarize_articles(articles)
+            
+            if not summarized_articles:
+                logger.warning("摘要生成失敗")
+                error_articles = [{
+                    'title': '摘要生成失敗',
+                    'summary': '抱歉，無法生成文章摘要，請稍後再試。',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+                return
+            
+            logger.info(f"成功生成 {len(summarized_articles)} 篇摘要")
+            
+            # 3. 發送結果
+            line_bot.send_random_results(user_id, summarized_articles)
+            
+            logger.info("隨機推送處理完成")
+            
+        except Exception as e:
+            logger.error(f"處理隨機推送時發生錯誤: {str(e)}")
+            try:
+                # 嘗試發送錯誤訊息
+                error_articles = [{
+                    'title': '處理錯誤',
+                    'summary': '抱歉，處理隨機推送時發生錯誤，請稍後再試。',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+            except Exception as send_error:
+                logger.error(f"發送錯誤訊息失敗: {str(send_error)}")
 
 # 創建新聞機器人實例
 news_bot = NewsBot()
@@ -170,13 +230,25 @@ def custom_process_keyword_query(event, keyword: str):
     except Exception as e:
         logger.error(f"啟動背景處理時發生錯誤: {str(e)}")
 
+def custom_process_random_push(event):
+    """自定義隨機推送處理"""
+    try:
+        user_id = event.source.user_id
+        
+        # 在背景執行隨機推送，避免 LINE 超時
+        threading.Thread(
+            target=news_bot.process_random_push,
+            args=(user_id,),
+            daemon=True
+        ).start()
+        
+    except Exception as e:
+        logger.error(f"啟動隨機推送時發生錯誤: {str(e)}")
+
 # 測試端點（僅開發環境使用）
 @app.route("/test/<keyword>", methods=['GET'])
 def test_query(keyword):
     """測試查詢端點（開發用）"""
-    if os.getenv('FLASK_ENV') != 'development':
-        abort(404)
-    
     try:
         # 模擬處理流程
         articles = crawler.fetch_articles(keyword, 2)
@@ -194,11 +266,32 @@ def test_query(keyword):
             'error': str(e)
         }, 500
 
+@app.route("/test-random", methods=['GET'])
+def test_random():
+    """測試隨機推送端點（開發用）"""
+    try:
+        # 模擬隨機推送流程
+        articles = crawler.fetch_random_articles(3)
+        summarized_articles = summarizer.summarize_articles(articles)
+        
+        return {
+            'type': 'random_push',
+            'articles_found': len(articles),
+            'summaries_generated': len(summarized_articles),
+            'results': summarized_articles
+        }
+        
+    except Exception as e:
+        return {
+            'error': str(e)
+        }, 500
+
 def setup_line_bot():
     """設定 LINE Bot 的自定義處理邏輯"""
     if line_bot:
         # 替換原本的處理方法
         line_bot.process_keyword_query = custom_process_keyword_query
+        line_bot.process_random_push = custom_process_random_push
 
 if __name__ == "__main__":
     # 初始化組件

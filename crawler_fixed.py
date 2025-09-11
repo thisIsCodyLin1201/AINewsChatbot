@@ -105,44 +105,29 @@ class TechOrangeCrawler:
             
             # 解析 RSS
             feed = feedparser.parse(response.content)
+            articles = []
             
-            # 先收集所有可用的文章
-            all_articles = []
-            for entry in feed.entries:
+            # 取得最新的 n 篇文章
+            for entry in feed.entries[:n]:
                 title = entry.get('title', '').strip()
                 link = entry.get('link', '').strip()
                 
                 if title and link:
-                    all_articles.append({
-                        'title': title,
-                        'url': link,
-                        'entry': entry
-                    })
-            
-            # 隨機選擇文章
-            import random
-            if len(all_articles) > n:
-                selected_articles = random.sample(all_articles, n)
-            else:
-                selected_articles = all_articles
-            
-            # 擷取選中文章的內容
-            final_articles = []
-            for article_info in selected_articles:
-                content = self._extract_article_content(article_info['url'])
-                
-                if content:
-                    final_articles.append({
-                        'title': article_info['title'],
-                        'url': article_info['url'],
-                        'content': content
-                    })
+                    # 擷取文章內容
+                    content = self._extract_article_content(link)
                     
-                    if len(final_articles) >= n:
-                        break
+                    if content:
+                        articles.append({
+                            'title': title,
+                            'url': link,
+                            'content': content
+                        })
+                        
+                        if len(articles) >= n:
+                            break
             
-            logger.info(f"成功隨機擷取 {len(final_articles)} 篇文章")
-            return final_articles
+            logger.info(f"成功隨機擷取 {len(articles)} 篇文章")
+            return articles
             
         except Exception as e:
             logger.error(f"隨機擷取文章時發生錯誤: {str(e)}")

@@ -61,9 +61,16 @@ class LINENewsBot:
             
             logger.info(f"收到用戶訊息: {user_message} (用戶ID: {user_id})")
             
+            # 檢查是否為隨機推送請求
+            random_keywords = ['隨機', '推薦', '推送', '最新', '熱門', '隨機推薦', '隨機新聞', 'random', 'latest']
+            if any(keyword in user_message.lower() for keyword in random_keywords):
+                # 處理隨機推送
+                self.process_random_push(event)
+                return
+            
             # 檢查是否為有效的關鍵字查詢
             if len(user_message) < 1:
-                reply_message = TextSendMessage(text="請輸入關鍵字來搜尋 TechOrange 文章！")
+                reply_message = TextSendMessage(text="請輸入關鍵字來搜尋 TechOrange 文章，或輸入「隨機」來獲取推薦文章！")
                 self.line_bot_api.reply_message(event.reply_token, reply_message)
                 return
             
@@ -96,6 +103,24 @@ class LINENewsBot:
             
         except LineBotApiError as e:
             logger.error(f"回傳處理中訊息失敗: {str(e)}")
+
+    def process_random_push(self, event):
+        """
+        處理隨機推送請求
+        
+        Args:
+            event: LINE MessageEvent 物件
+        """
+        try:
+            # 先回覆正在處理的訊息
+            processing_message = TextSendMessage(text="正在為您推薦最新的 TechOrange 文章，請稍候...")
+            self.line_bot_api.reply_message(event.reply_token, processing_message)
+            
+            # 這裡會由主應用程序調用隨機爬蟲和摘要功能
+            # 然後推送結果訊息給用戶
+            
+        except LineBotApiError as e:
+            logger.error(f"回傳隨機推送處理中訊息失敗: {str(e)}")
 
     def send_article_results(self, user_id: str, articles: List[Dict], keyword: str):
         """
@@ -142,6 +167,54 @@ class LINENewsBot:
             # 嘗試發送錯誤訊息
             try:
                 error_message = TextSendMessage(text="發送搜尋結果時發生錯誤，請稍後再試。")
+                self.line_bot_api.push_message(user_id, error_message)
+            except LineBotApiError:
+                pass
+
+    def send_random_results(self, user_id: str, articles: List[Dict]):
+        """
+        發送隨機推送文章結果給用戶
+        
+        Args:
+            user_id: LINE 用戶 ID
+            articles: 包含摘要的文章列表
+        """
+        try:
+            if not articles:
+                no_result_message = TextSendMessage(
+                    text="抱歉，目前無法取得推薦文章。請稍後再試。"
+                )
+                self.line_bot_api.push_message(user_id, no_result_message)
+                return
+            
+            # 先發送總結訊息
+            summary_message = TextSendMessage(
+                text=f"🎯 為您推薦 {len(articles)} 篇最新的 TechOrange 文章："
+            )
+            self.line_bot_api.push_message(user_id, summary_message)
+            
+            # 分別發送每篇文章，避免內容被截斷
+            for i, article in enumerate(articles, 1):
+                try:
+                    article_message = self._create_single_article_message(article, i)
+                    self.line_bot_api.push_message(user_id, article_message)
+                    
+                    # 在多篇文章間稍作延遲，避免發送過快
+                    if i < len(articles):
+                        import time
+                        time.sleep(0.5)
+                        
+                except Exception as e:
+                    logger.error(f"發送第 {i} 篇推薦文章失敗: {str(e)}")
+                    continue
+            
+            logger.info(f"成功發送 {len(articles)} 篇推薦文章給用戶 {user_id}")
+            
+        except LineBotApiError as e:
+            logger.error(f"發送隨機推送結果失敗: {str(e)}")
+            # 嘗試發送錯誤訊息
+            try:
+                error_message = TextSendMessage(text="發送推薦文章時發生錯誤，請稍後再試。")
                 self.line_bot_api.push_message(user_id, error_message)
             except LineBotApiError:
                 pass
