@@ -2,13 +2,16 @@
 flask==2.3.3
 gunicorn==21.2.0
 
-# LINE Bot SDK
+# LINE Bot SDK - 使用相容版本
 line-bot-sdk==3.4.0
 
 # HTTP requests
 requests==2.31.0
 
-# Web scraping
+# 明確指定 aiohttp 相容版本
+aiohttp==3.8.6
+
+# Web scraping - 使用預編譯版本
 beautifulsoup4==4.12.2
 lxml==4.9.3
 
@@ -21,6 +24,6 @@ google-generativeai==0.1.0
 # Environment management
 python-dotenv==1.0.0
 
-# Additional dependencies that might be needed
+# 相容性約束
 urllib3>=1.26.0,<2.0.0
 certifi>=2023.7.22
