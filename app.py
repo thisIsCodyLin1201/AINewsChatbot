@@ -9,6 +9,7 @@ import time
 from flask import Flask, request, abort
 from dotenv import load_dotenv
 import logging
+from linebot.models import TextSendMessage
 
 # 載入環境變數
 load_dotenv()
@@ -386,27 +387,102 @@ def custom_process_keyword_query(event, keyword: str):
     except Exception as e:
         logger.error(f"啟動背景處理時發生錯誤: {str(e)}")
 
+def safe_background_random_push(user_id: str):
+    """
+    安全的背景隨機推送處理，包含完整錯誤捕捉
+    
+    Args:
+        user_id: LINE 用戶 ID
+    """
+    try:
+        logger.info(f"[背景任務] 開始處理隨機推送: user_id={user_id}")
+        
+        # 檢查全域組件
+        if not crawler:
+            logger.error("[背景任務] Crawler 未初始化")
+            if line_bot:
+                error_msg = "抱歉，文章爬蟲系統尚未準備好，請稍後再試。"
+                line_bot.line_bot_api.push_message(user_id, TextSendMessage(text=error_msg))
+            return
+            
+        if not line_bot:
+            logger.error("[背景任務] LINE Bot 未初始化")
+            return
+        
+        # 1. 爬取隨機文章
+        logger.info("[背景任務] 開始爬取隨機文章...")
+        try:
+            articles = crawler.fetch_random_articles(3)
+            logger.info(f"[背景任務] 爬蟲返回: {len(articles) if articles else 0} 篇文章")
+            
+            if not articles:
+                logger.warning("[背景任務] 未取得任何文章")
+                error_msg = "抱歉，目前無法取得文章，請稍後再試。"
+                line_bot.line_bot_api.push_message(user_id, TextSendMessage(text=error_msg))
+                return
+                
+        except Exception as e:
+            logger.error(f"[背景任務] 爬蟲失敗: {str(e)}")
+            import traceback
+            logger.error(f"[背景任務] 爬蟲錯誤詳情: {traceback.format_exc()}")
+            error_msg = f"抱歉，文章爬取失敗: {str(e)}"
+            line_bot.line_bot_api.push_message(user_id, TextSendMessage(text=error_msg))
+            return
+        
+        # 2. 生成摘要
+        logger.info("[背景任務] 開始生成摘要...")
+        try:
+            if summarizer:
+                summarized_articles = summarizer.summarize_articles(articles)
+                logger.info(f"[背景任務] 摘要生成完成: {len(summarized_articles) if summarized_articles else 0} 篇")
+            else:
+                logger.warning("[背景任務] Summarizer 未初始化，使用原始內容")
+                summarized_articles = articles
+                for article in summarized_articles:
+                    article['summary'] = article.get('description', '無摘要')[:150] + "..."
+                    
+        except Exception as e:
+            logger.error(f"[背景任務] 摘要生成失敗: {str(e)}")
+            import traceback
+            logger.error(f"[背景任務] 摘要錯誤詳情: {traceback.format_exc()}")
+            # 使用原始文章內容作為備案
+            summarized_articles = articles
+            for article in summarized_articles:
+                article['summary'] = article.get('description', '摘要生成失敗')[:150] + "..."
+        
+        # 3. 發送結果
+        logger.info("[背景任務] 準備發送文章結果...")
+        try:
+            line_bot.send_random_results(user_id, summarized_articles)
+            logger.info("[背景任務] 隨機推送完成！")
+            
+        except Exception as e:
+            logger.error(f"[背景任務] 發送結果失敗: {str(e)}")
+            import traceback
+            logger.error(f"[背景任務] 發送錯誤詳情: {traceback.format_exc()}")
+            error_msg = "文章處理完成，但發送時發生錯誤，請重新嘗試。"
+            line_bot.line_bot_api.push_message(user_id, TextSendMessage(text=error_msg))
+            
+    except Exception as e:
+        logger.error(f"[背景任務] 整體處理失敗: {str(e)}")
+        import traceback
+        logger.error(f"[背景任務] 整體錯誤詳情: {traceback.format_exc()}")
+        try:
+            if line_bot:
+                error_msg = f"處理隨機推送時發生未預期的錯誤，請聯絡開發者。"
+                line_bot.line_bot_api.push_message(user_id, TextSendMessage(text=error_msg))
+        except:
+            pass
+
 def custom_process_random_push(event):
     """自定義隨機推送處理"""
     try:
         user_id = event.source.user_id
         logger.info(f"啟動隨機推送背景任務: user_id={user_id}")
         
-        # 檢查全域變數
-        if not crawler:
-            logger.error("Global crawler 未初始化")
-            return
-            
-        if not line_bot:
-            logger.error("Global line_bot 未初始化")
-            return
-        
-        # 建立 NewsBot 實例進行處理
-        news_bot_instance = NewsBot()
-        
-        # 在背景執行隨機推送，避免 LINE 超時
+        # 在背景執行安全的隨機推送處理
         threading.Thread(
-            target=news_bot_instance.process_random_push,
+            target=safe_background_random_push,
             args=(user_id,),
             daemon=True
         ).start()
