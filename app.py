@@ -263,12 +263,37 @@ class NewsBot:
         try:
             logger.info(f"開始處理隨機推送: 用戶ID={user_id}")
             
+            # 檢查組件是否初始化
+            if not crawler:
+                logger.error("Crawler 未初始化")
+                error_articles = [{
+                    'title': '系統錯誤',
+                    'summary': '抱歉，爬蟲系統尚未初始化，請稍後再試。',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+                return
+                
+            if not summarizer:
+                logger.warning("Summarizer 未初始化，將不提供摘要")
+            
             # 1. 隨機爬取文章
             logger.info(f"正在隨機擷取 TechOrange 文章...")
-            articles = crawler.fetch_random_articles(self.max_articles)
+            try:
+                articles = crawler.fetch_random_articles(self.max_articles)
+                logger.info(f"爬蟲返回結果: {len(articles) if articles else 0} 篇文章")
+            except Exception as e:
+                logger.error(f"爬取文章失敗: {str(e)}")
+                error_articles = [{
+                    'title': '爬取失敗',
+                    'summary': f'抱歉，無法取得文章: {str(e)}',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+                return
             
             if not articles:
-                # 發送無文章的訊息
+                logger.warning("爬蟲返回空結果")
                 error_articles = [{
                     'title': '無法取得文章',
                     'summary': '抱歉，目前無法擷取文章，請稍後再試。',
@@ -276,27 +301,56 @@ class NewsBot:
                 }]
                 line_bot.send_random_results(user_id, error_articles)
                 return
-            
+
             logger.info(f"成功隨機擷取 {len(articles)} 篇文章")
             
             # 2. 生成摘要
-            logger.info("正在生成文章摘要...")
-            summarized_articles = summarizer.summarize_articles(articles)
-            
+            if summarizer:
+                logger.info("正在生成文章摘要...")
+                try:
+                    summarized_articles = summarizer.summarize_articles(articles)
+                    logger.info(f"摘要器返回結果: {len(summarized_articles) if summarized_articles else 0} 篇摘要")
+                except Exception as e:
+                    logger.error(f"摘要生成失敗: {str(e)}")
+                    # 使用原始文章內容，不包含摘要
+                    summarized_articles = articles
+                    for article in summarized_articles:
+                        article['summary'] = article.get('description', '摘要生成失敗')[:100] + "..."
+            else:
+                logger.info("使用原始文章內容（無摘要功能）")
+                summarized_articles = articles
+                for article in summarized_articles:
+                    article['summary'] = article.get('description', '無摘要')[:100] + "..."
+
             if not summarized_articles:
-                logger.warning("摘要生成失敗")
+                logger.error("最終文章列表為空")
                 error_articles = [{
-                    'title': '摘要生成失敗',
-                    'summary': '抱歉，無法生成文章摘要，請稍後再試。',
+                    'title': '處理失敗',
+                    'summary': '抱歉，文章處理失敗，請稍後再試。',
                     'url': '#'
                 }]
                 line_bot.send_random_results(user_id, error_articles)
                 return
-            
-            logger.info(f"成功生成 {len(summarized_articles)} 篇摘要")
+
+            logger.info(f"準備發送 {len(summarized_articles)} 篇文章給用戶")
             
             # 3. 發送結果
             line_bot.send_random_results(user_id, summarized_articles)
+            logger.info("隨機推送處理完成")
+            
+        except Exception as e:
+            logger.error(f"隨機推送處理失敗: {str(e)}")
+            import traceback
+            logger.error(f"詳細錯誤: {traceback.format_exc()}")
+            try:
+                error_articles = [{
+                    'title': '系統錯誤',
+                    'summary': f'處理請求時發生錯誤: {str(e)}',
+                    'url': '#'
+                }]
+                line_bot.send_random_results(user_id, error_articles)
+            except Exception as send_error:
+                logger.error(f"發送錯誤訊息也失敗: {str(send_error)}")
             
             logger.info("隨機推送處理完成")
             
@@ -336,16 +390,33 @@ def custom_process_random_push(event):
     """自定義隨機推送處理"""
     try:
         user_id = event.source.user_id
+        logger.info(f"啟動隨機推送背景任務: user_id={user_id}")
+        
+        # 檢查全域變數
+        if not crawler:
+            logger.error("Global crawler 未初始化")
+            return
+            
+        if not line_bot:
+            logger.error("Global line_bot 未初始化")
+            return
+        
+        # 建立 NewsBot 實例進行處理
+        news_bot_instance = NewsBot()
         
         # 在背景執行隨機推送，避免 LINE 超時
         threading.Thread(
-            target=news_bot.process_random_push,
+            target=news_bot_instance.process_random_push,
             args=(user_id,),
             daemon=True
         ).start()
         
+        logger.info("隨機推送背景任務已啟動")
+        
     except Exception as e:
         logger.error(f"啟動隨機推送時發生錯誤: {str(e)}")
+        import traceback
+        logger.error(f"錯誤詳情: {traceback.format_exc()}")
 
 # 測試端點
 @app.route("/test/<keyword>", methods=['GET'])
