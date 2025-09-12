@@ -98,8 +98,12 @@ class LINENewsBot:
             processing_message = TextSendMessage(text=f"正在搜尋「{keyword}」相關的 TechOrange 文章，請稍候...")
             self.line_bot_api.reply_message(event.reply_token, processing_message)
             
-            # 這裡會由主應用程序調用爬蟲和摘要功能
-            # 然後推送結果訊息給用戶
+            # 檢查是否有自定義處理函數
+            if hasattr(self, '_custom_keyword_handler'):
+                logger.info(f"調用自定義關鍵字查詢處理器: {keyword}")
+                self._custom_keyword_handler(event, keyword)
+            else:
+                logger.warning("沒有設置自定義關鍵字查詢處理器")
             
         except LineBotApiError as e:
             logger.error(f"回傳處理中訊息失敗: {str(e)}")
@@ -116,8 +120,12 @@ class LINENewsBot:
             processing_message = TextSendMessage(text="正在為您推薦最新的 TechOrange 文章，請稍候...")
             self.line_bot_api.reply_message(event.reply_token, processing_message)
             
-            # 這裡會由主應用程序調用隨機爬蟲和摘要功能
-            # 然後推送結果訊息給用戶
+            # 檢查是否有自定義處理函數
+            if hasattr(self, '_custom_random_handler'):
+                logger.info("調用自定義隨機推送處理器")
+                self._custom_random_handler(event)
+            else:
+                logger.warning("沒有設置自定義隨機推送處理器")
             
         except LineBotApiError as e:
             logger.error(f"回傳隨機推送處理中訊息失敗: {str(e)}")

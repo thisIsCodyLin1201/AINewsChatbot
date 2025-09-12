@@ -105,6 +105,8 @@ def callback():
             # 嘗試重新初始化組件
             if initialize_components():
                 logger.info("重新初始化成功")
+                # 重新設置自定義處理邏輯
+                setup_line_bot()
             else:
                 logger.error("重新初始化失敗")
                 return 'OK', 200
@@ -540,9 +542,11 @@ def test_random():
 def setup_line_bot():
     """設定 LINE Bot 的自定義處理邏輯"""
     if line_bot:
-        # 替換原本的處理方法
-        line_bot.process_keyword_query = custom_process_keyword_query
-        line_bot.process_random_push = custom_process_random_push
+        logger.info("設置 LINE Bot 自定義處理器")
+        # 設置自定義處理函數為屬性
+        line_bot._custom_random_handler = custom_process_random_push
+        line_bot._custom_keyword_handler = custom_process_keyword_query
+        logger.info("LINE Bot 自定義處理器設置完成")
 
 if __name__ == "__main__":
     # 初始化組件
