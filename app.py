@@ -35,17 +35,38 @@ def initialize_components():
     global line_bot, crawler, summarizer
     
     try:
+        # 檢查環境變數
+        line_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+        line_secret = os.getenv('LINE_CHANNEL_SECRET') 
+        gemini_key = os.getenv('GEMINI_API_KEY')
+        
+        logger.info("檢查環境變數...")
+        logger.info(f"LINE_CHANNEL_ACCESS_TOKEN: {'設置' if line_token else '未設置'}")
+        logger.info(f"LINE_CHANNEL_SECRET: {'設置' if line_secret else '未設置'}")
+        logger.info(f"GEMINI_API_KEY: {'設置' if gemini_key else '未設置'}")
+        
+        if not line_token or not line_secret:
+            logger.error("LINE 環境變數未設置，無法初始化 LINE Bot")
+            return False
+        
         # 初始化 LINE Bot
+        logger.info("正在初始化 LINE Bot...")
         line_bot = LINENewsBot()
         logger.info("LINE Bot 初始化成功")
         
         # 初始化爬蟲
+        logger.info("正在初始化 TechOrange 爬蟲...")
         crawler = TechOrangeCrawler()
         logger.info("TechOrange 爬蟲初始化成功")
         
         # 初始化摘要器
-        summarizer = GeminiSummarizer()
-        logger.info("Gemini 摘要器初始化成功")
+        if gemini_key:
+            logger.info("正在初始化 Gemini 摘要器...")
+            summarizer = GeminiSummarizer()
+            logger.info("Gemini 摘要器初始化成功")
+        else:
+            logger.warning("GEMINI_API_KEY 未設置，摘要功能將不可用")
+            summarizer = None
         
         return True
         
@@ -79,9 +100,13 @@ def callback():
         
         # 確保 LINE Bot 已初始化
         if not line_bot:
-            logger.error("LINE Bot 尚未初始化")
-            # 返回 200 避免 LINE 重複發送
-            return 'OK', 200
+            logger.error("LINE Bot 尚未初始化，嘗試重新初始化...")
+            # 嘗試重新初始化組件
+            if initialize_components():
+                logger.info("重新初始化成功")
+            else:
+                logger.error("重新初始化失敗")
+                return 'OK', 200
         
         # 處理正常的 webhook 事件
         logger.info("處理 LINE webhook 事件")
@@ -91,6 +116,8 @@ def callback():
     except Exception as e:
         logger.error(f"處理 webhook 失敗: {str(e)}")
         logger.error(f"錯誤類型: {type(e).__name__}")
+        import traceback
+        logger.error(f"錯誤詳情: {traceback.format_exc()}")
         # 即使出錯也返回 200，避免 LINE 重複發送請求
     
     return 'OK', 200
@@ -99,24 +126,46 @@ def callback():
 def health_check():
     """健康檢查端點"""
     try:
-        # 簡單的健康檢查
-        status = {
-            'status': 'healthy',
-            'timestamp': time.time(),
-            'components': {
-                'line_bot': line_bot is not None,
-                'crawler': crawler is not None,
-                'summarizer': summarizer is not None
-            }
+        # 檢查組件狀態
+        components_status = {
+            'line_bot': line_bot is not None,
+            'crawler': crawler is not None,
+            'summarizer': summarizer is not None
         }
         
         # 檢查關鍵環境變數
-        required_vars = ['LINE_CHANNEL_ACCESS_TOKEN', 'LINE_CHANNEL_SECRET', 'GEMINI_API_KEY']
-        missing_vars = [var for var in required_vars if not os.getenv(var)]
+        env_vars = {
+            'LINE_CHANNEL_ACCESS_TOKEN': bool(os.getenv('LINE_CHANNEL_ACCESS_TOKEN')),
+            'LINE_CHANNEL_SECRET': bool(os.getenv('LINE_CHANNEL_SECRET')),
+            'GEMINI_API_KEY': bool(os.getenv('GEMINI_API_KEY'))
+        }
         
-        if missing_vars:
-            status['status'] = 'degraded'
-            status['missing_env_vars'] = missing_vars
+        # 判斷整體狀態
+        all_components_ok = all(components_status.values())
+        required_env_ok = env_vars['LINE_CHANNEL_ACCESS_TOKEN'] and env_vars['LINE_CHANNEL_SECRET']
+        
+        if all_components_ok and required_env_ok:
+            overall_status = 'healthy'
+        elif required_env_ok:
+            overall_status = 'degraded'  # 環境變數 OK 但組件有問題
+        else:
+            overall_status = 'unhealthy'  # 缺少必要環境變數
+        
+        status = {
+            'status': overall_status,
+            'timestamp': time.time(),
+            'components': components_status,
+            'environment_variables': env_vars
+        }
+        
+        # 如果有問題，添加建議
+        if overall_status != 'healthy':
+            suggestions = []
+            if not required_env_ok:
+                suggestions.append("檢查 LINE_CHANNEL_ACCESS_TOKEN 和 LINE_CHANNEL_SECRET 環境變數")
+            if not all_components_ok:
+                suggestions.append("組件初始化失敗，檢查日誌詳情")
+            status['suggestions'] = suggestions
         
         return status
     except Exception as e:
