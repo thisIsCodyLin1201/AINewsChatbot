@@ -17,7 +17,7 @@ load_dotenv()
 # 匯入自定義模組
 from line_handler import LINENewsBot
 from crawler import TechOrangeCrawler
-from summarizer import GeminiSummarizer
+from summarizer import get_summarizer
 
 # 設置日誌
 logging.basicConfig(level=logging.INFO)
@@ -63,7 +63,7 @@ def initialize_components():
         # 初始化摘要器
         if gemini_key:
             logger.info("正在初始化 Gemini 摘要器...")
-            summarizer = GeminiSummarizer()
+            summarizer = get_summarizer()
             logger.info("Gemini 摘要器初始化成功")
         else:
             logger.warning("GEMINI_API_KEY 未設置，摘要功能將不可用")
